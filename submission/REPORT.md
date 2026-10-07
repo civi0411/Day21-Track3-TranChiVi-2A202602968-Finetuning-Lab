@@ -122,10 +122,30 @@ Pha trộn 3–5% dữ liệu hội thoại tổng quát tiếng Việt vào t�
 
 ---
 
-## Phụ lục — thưởng đã làm
+## Phụ lục — Thưởng đã làm
 
-- [x] B1 NB6 merge + hot-swap (Điểm trước merge: 0.9650, sau merge: 0.9650, delta = +0.0000, hot-swap adapter thành công)
+### [x] B1 — NB6: Merge & Phục vụ nhiều adapter (+3 điểm · deck §23)
+- **Kết quả đo đạc (*results/merge_check.json*)**: 
+  - Điểm trước merge: `0.9650`
+  - Điểm sau merge: `0.9650`
+  - Chênh lệch $\Delta = +0.0000$ (nằm hoàn hảo trong ngưỡng dung sai an toàn `tolerance = 0.01`).
+  - Đã thực hiện hoán đổi (hot-swap) thành công giữa các adapter trên cùng một base model đang nạp trong VRAM.
+- **Trả lời câu hỏi lý thuyết deck §23:**
+  - *Merge cho overhead suy luận bằng 0, nhưng bạn mất gì?*  
+    Khi merge adapter trực tiếp vào trọng số cơ sở theo công thức $W = W_0 + \frac{\alpha}{r}BA$, ta triệt tiêu hoàn toàn chi phí trễ tính toán phép nhân ma trận LoRA ở thời gian suy luận. Tuy nhiên, cái mất lớn nhất là **tính linh hoạt đa nhiệm (multi-tenancy)** và **khả năng phục hồi (reversibility)**. Một khi đã merge, mô hình bị đóng băng vĩnh viễn vào tác vụ phân loại JSON này, không thể quay lại base model gốc trừ khi phải nạp lại toàn bộ checkpoint hơn 9GB. Hơn nữa, việc gộp nhiều adapter khác nhau vào cùng một base sẽ gây xung đột không gian trọng số (catastrophic interference/weight contamination), làm suy thoái nghiêm trọng chất lượng của từng tác vụ riêng lẻ.
+  - *Khi nào nên giữ adapter riêng dù chậm hơn một chút?*  
+    Nên giữ adapter riêng trong các hệ thống **Multi-tenant Serving** thực tế (như kiến trúc phục vụ trên vLLM hoặc SGLang): ta chỉ cần giữ duy nhất một bản sao base model trong VRAM GPU, sau đó nạp đồng thời hàng chục adapter LoRA chuyên biệt (mỗi adapter chỉ nặng vài chục MB). Hệ thống có thể linh hoạt định tuyến và kích hoạt adapter tương ứng theo từng request của từng người dùng/nghiệp vụ khác nhau mà không phải nhân bản base model, tiết kiệm hàng chục đến hàng trăm GB bộ nhớ VRAM đắt đỏ.
+
+### [x] B4 — Phân tích quét rank có kiểm soát (+3 điểm · deck §11)
+- **Rank có phải đòn bẩy thực sự không?**  
+  Theo kết luận từ nghiên cứu *LoRA Without Regret* và deck §11, rank $r$ là **thước đo năng lực biểu diễn tương ứng với lượng thông tin có trong dữ liệu huấn luyện**, hoàn toàn không phải là một nút vặn để tăng chất lượng vô điều kiện. Tập dữ liệu của chúng ta gồm 250 ticket chăm sóc khách hàng tiếng Việt với không gian nhãn hẹp và cấu trúc JSON 4 trường định hình sẵn có lượng thông tin (entropy) tương đối thấp. Do đó, mức rank $r=16$ (hoặc thậm chí $r=8$) đã hoàn toàn đủ dung lượng để adapter hấp thụ toàn bộ tri thức bài toán; đẩy rank lên $r=64$ không mang lại thêm giá trị biểu diễn mà chỉ làm tăng số tham số huấn luyện gấp 4 lần và tăng nguy cơ quá khớp (overfitting).
+- **Xếp hạng 3 nút vặn LoRA theo mức ảnh hưởng (có số liệu thực nghiệm từ NB4):**
+  1. **Hạng 1: Learning Rate (Đòn bẩy sống còn · Biên độ 96.5%)**: Chuyển từ mức LR LoRA 1e-4 xuống mức Full-FT 1e-5 (run `wrong_lr`) làm target accuracy sụp đổ hoàn toàn từ **0.965 về 0.000**. LR không đủ lớn sẽ khiến adapter bị đóng băng do hệ số triệt tiêu $\alpha/r$.
+  2. **Hạng 2: Vị trí adapter (Đòn bẩy cấu trúc · Biên độ tính tổng quát & ổn định)**: Phủ adapter lên toàn bộ `text-linear` (12 modules) đem lại sự an toàn và đồng đều trên kiến trúc lai GQA + Linear Attention của Qwen3.5 so với việc dồn cục bộ vào `q,v` (chỉ 2 modules).
+  3. **Hạng 3: Rank $r$ (Đòn bẩy thứ cấp · Biên độ <0.5%)**: Thí nghiệm đối chứng matched-rank giữa `correct` ($r=16$) và `attn_only` ($r=283$) cho thấy dù tăng rank gấp **17.6 lần**, độ chính xác target chỉ dao động nhẹ từ **0.965 lên 0.970** (biên độ chỉ $\Delta = +0.005$).
+
+---
 - [ ] B2 dataset miền riêng (`data/CUSTOM_DATASET.md`)
 - [ ] B3 reasoning-trace collapse (hai `MASK_MODE`, kèm `valid_trace_rate`)
-- [ ] B4 quét rank có kiểm soát
 - [ ] B5 HuggingFace Hub — link:
+

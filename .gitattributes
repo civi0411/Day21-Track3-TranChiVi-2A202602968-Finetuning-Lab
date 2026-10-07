@@ -1,0 +1,5 @@
+# Enforce LF for data files to maintain SHA256 checksum integrity
+*.jsonl text eol=lf
+*.json text eol=lf
+*.csv text eol=lf
+*.md text eol=lf
